@@ -1,16 +1,17 @@
-[![Go Reference](https://pkg.go.dev/badge/github.com/ajjensen13/go-enumerator.svg)](https://pkg.go.dev/github.com/ajjensen13/go-enumerator)
+## Description
+`go-enumerator` is a code generation tool designed for making constants behave more
+like enums. The generated methods allow users to:
 
-# go-enumerator
-go-enumerator is a code generation tool that
-generates methods for constant types that
-allow them to behave similar to enums in other languages.
+1. Convert numeric constants to string representations using `fmt.Print(x)`
+2. Parse string representations using `fmt.Scan("Name", &x)`
+3. Check if variables hold valid enum values using `x.Defined()`
+4. Iterate through all defined enum values using `x.Next()`
 
-go-enumerator is designed to be invoked by `go generate`, 
+`go-enumerator` is designed to be invoked by `go generate`, 
 but it can be used as a command-line tool as well.
-
-See [https://pkg.go.dev/github.com/ajjensen13/go-enumerator](https://pkg.go.dev/github.com/ajjensen13/go-enumerator)
-for additional documentation.
-
+---
+[![Go Reference](https://pkg.go.dev/badge/github.com/ajjensen13/go-enumerator.svg)](https://pkg.go.dev/github.com/ajjensen13/go-enumerator) <br />
+Additional documentation available at [pkg.go.dev](https://pkg.go.dev/github.com/ajjensen13/go-enumerator)
 ## Installation
 Installation is easy, just install the package using the `go install` tool.
 
@@ -19,10 +20,10 @@ go install github.com/ajjensen13/go-enumerator
 ```
 
 ## Overview
-Below is an example of the intended use for go-enumerate.
-When invoked via `go generate` all command line arguments are optional.
-The tool will use the GOFILE, GOPACKAGE, and GOLINE environment variables
-to find the type declaration immediately following to `go:generate` comment.
+Below is an example of the intended use for `go-enumerate`.
+All command line arguments are optional `go generate`.
+The tool will use the `$GOFILE`, `$GOPACKAGE`, and `$GOLINE` environment variables
+to find the type declaration immediately following to `//go:generate` comment.
 
 ```go
 //go:generate go-enumerator
@@ -49,7 +50,6 @@ func (k Kind) Defined() bool { /* omitted for brevity */ }
 
 // Next returns the next defined value after k
 func (k Kind) Next() Kind { /* omitted for brevity */ }
-
 ```
 
 `String()` and `Scan()` can be used in conjunction with the `fmt` package to parse
@@ -59,6 +59,7 @@ and encode values into human-friendly representations.
 
 `Defined()` can be used to ensure that a given variable holds a defined value.
 
-## Remarks
-* go-enumerator was inspired by [stringer](https://pkg.go.dev/golang.org/x/tools/cmd/stringer)
+### Remarks
+* `go-enumerator` was inspired by [stringer](https://pkg.go.dev/golang.org/x/tools/cmd/stringer), which is a better `String()` generator. If all you need is a `String()` method for a numeric constant, consider using that tool instead.
 * Examples for how to use the generated code can be found at [https://pkg.go.dev/github.com/ajjensen13/go-enumerator/example](https://pkg.go.dev/github.com/ajjensen13/go-enumerator/example)
+* If you find this tool useful, give the repo a star! Feel free leave issues and/or suggest fixes or improvements as well 🙂

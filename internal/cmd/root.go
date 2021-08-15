@@ -32,8 +32,7 @@ var rootCmd = &cobra.Command{
 	Short: "Generate enum-like code for Go constants",
 	Long: `Generate enum-like code for Go constants. 
 
-go-enumerator is designed to be called by go generate. 
-See https://pkg.go.dev/github.com/ajjensen13/go-enumerator for usage examples.`,
+go-enumerator is designed to be called by go generate. See https://pkg.go.dev/github.com/ajjensen13/go-enumerator for usage examples.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		inputFileName, ok := resolveParameterValue(cmd.Flag("input"), "GOFILE")
 		if !ok {
@@ -51,11 +50,14 @@ See https://pkg.go.dev/github.com/ajjensen13/go-enumerator for usage examples.`,
 		}
 
 		typeName, _ := resolveParameterValue(cmd.Flag("type"), "")
-		lineStr, _ := resolveParameterValue(cmd.Flag("line"), "GOLINE")
+
 		var line int
-		_, err = fmt.Sscan(lineStr, &line)
-		if err != nil {
-			return err
+		lineStr, _ := resolveParameterValue(cmd.Flag("line"), "GOLINE")
+		if lineStr != "" {
+			_, err = fmt.Sscan(lineStr, &line)
+			if err != nil {
+				return fmt.Errorf("failed to determine source line: %w", err)
+			}
 		}
 
 		tn, err := findTypeDecl(pkg.Fset, pkg.TypesInfo, typeName, inputFileName, line)
@@ -63,6 +65,7 @@ See https://pkg.go.dev/github.com/ajjensen13/go-enumerator for usage examples.`,
 			return err
 		}
 
+		// update typeName if it was not specified by the caller, but we found it in the source code
 		if typeName == "" && tn.Name() != "" {
 			typeName = tn.Name()
 		}
@@ -71,21 +74,21 @@ See https://pkg.go.dev/github.com/ajjensen13/go-enumerator for usage examples.`,
 		if receiver == "" {
 			receiver = defaultReceiverName(tn)
 		}
-		receiver = safeVarName(receiver)
+		receiver = safeIndent(receiver)
 
 		vs, kind := findConstantsOfType(pkg.Fset, pkg.TypesInfo, tn)
 		if len(vs) == 0 {
 			return fmt.Errorf("no constants of type %q found", tn.Name())
 		}
 
-		f, err := generateEnums(pkgName, tn, vs, kind, receiver)
+		f, err := generateEnumCode(pkgName, tn, vs, kind, receiver)
 		if err != nil {
 			return err
 		}
 
 		outputFileName, ok := resolveParameterValue(cmd.Flag("output"), "")
 		if !ok {
-			outputFileName = fmt.Sprintf("%s_enum.go", unexportName(typeName))
+			outputFileName = fmt.Sprintf("%s_enum.go", unexportedName(typeName))
 		}
 
 		out, cleanup, err := openOutputFile(outputFileName)
@@ -96,6 +99,7 @@ See https://pkg.go.dev/github.com/ajjensen13/go-enumerator for usage examples.`,
 
 		return f.Render(out)
 	},
+	Example: "go-enumerator --input example.go --output kind_enum.go --pkg example --type Kind --receiver k",
 }
 
 func init() {
@@ -118,6 +122,9 @@ var (
 	flagLine     int
 )
 
+// resolveParameterValue returns the parameter value from f if it was specified
+// by the user. Otherwise, if env is not empty, it looks up the value from the
+// environment variable named env.
 func resolveParameterValue(f *pflag.Flag, env string) (string, bool) {
 	if f.Changed {
 		return f.Value.String(), true
@@ -130,6 +137,7 @@ func resolveParameterValue(f *pflag.Flag, env string) (string, bool) {
 	return f.DefValue, false
 }
 
+// loadPackage loads the package of file inputFileName.
 func loadPackage(pkgName, inputFileName string) (*packages.Package, error) {
 	pkgs, err := packages.Load(&packages.Config{Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo}, fmt.Sprintf("file=%s", inputFileName))
 	if err != nil {
@@ -156,6 +164,11 @@ func loadPackage(pkgName, inputFileName string) (*packages.Package, error) {
 	return ret, nil
 }
 
+// findTypeDecl find the relevant *types.TypeName from fset & info.
+// If name is passed, a type with that name is searched for.
+// Otherwise, the first type after line in inputFileName is returned.
+// If the next declaration after line in inputFileName is not a *types.TypeName,
+// an error is returned.
 func findTypeDecl(fset *token.FileSet, info *types.Info, name, inputFileName string, line int) (*types.TypeName, error) {
 	if name != "" {
 		return findTypeDeclByName(info, name)
@@ -164,6 +177,7 @@ func findTypeDecl(fset *token.FileSet, info *types.Info, name, inputFileName str
 	return findTypeDeclByPosition(fset, info, inputFileName, line)
 }
 
+// findTypeDeclByPosition finds the next *type.TypeName in inputFileName after line
 func findTypeDeclByPosition(fset *token.FileSet, info *types.Info, inputFileName string, line int) (*types.TypeName, error) {
 	var ret *types.TypeName
 	var closestObject types.Object
@@ -204,6 +218,7 @@ func findTypeDeclByPosition(fset *token.FileSet, info *types.Info, inputFileName
 	return ret, nil
 }
 
+// findTypeDeclByName finds the the *types.TypeName in info named name.
 func findTypeDeclByName(info *types.Info, name string) (*types.TypeName, error) {
 	for _, object := range info.Defs {
 		if object == nil {
@@ -225,6 +240,7 @@ func findTypeDeclByName(info *types.Info, name string) (*types.TypeName, error) 
 	return nil, fmt.Errorf("type %q not found", name)
 }
 
+// findConstantsOfType finds all constants in info that are of type obj.
 func findConstantsOfType(fset *token.FileSet, info *types.Info, obj types.Object) ([]*types.Const, constant.Kind) {
 	var ret []*types.Const
 	kind := constant.Unknown
@@ -280,6 +296,7 @@ func findConstantsOfType(fset *token.FileSet, info *types.Info, obj types.Object
 	return ret, kind
 }
 
+// sameFile determines if a and b point to the same file
 func sameFile(a, b string) bool {
 	as, err := os.Stat(a)
 	if err != nil {
@@ -294,7 +311,8 @@ func sameFile(a, b string) bool {
 	return os.SameFile(as, bs)
 }
 
-func generateEnums(pkgName string, eType *types.TypeName, cs []*types.Const, kind constant.Kind, receiver string) (f *jen.File, err error) {
+// generateEnumCode generates the code to turn tn into an enum
+func generateEnumCode(pkgName string, tn *types.TypeName, cs []*types.Const, kind constant.Kind, receiver string) (f *jen.File, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			f = nil
@@ -302,100 +320,38 @@ func generateEnums(pkgName string, eType *types.TypeName, cs []*types.Const, kin
 		}
 	}()
 
-	tokenVarName := safeVarName("token", receiver)
-	stringVarName := safeVarName("str", receiver, tokenVarName)
-	scanStateVarName := safeVarName("scanState", receiver, tokenVarName, stringVarName)
-	verbVarName := safeVarName("verb", receiver, tokenVarName, stringVarName, scanStateVarName)
-	xVarName := safeVarName("x", receiver, tokenVarName, stringVarName, scanStateVarName, verbVarName)
+	tokenVarName := safeIndent("token", receiver)
+	stringVarName := safeIndent("str", receiver, tokenVarName)
+	scanStateVarName := safeIndent("scanState", receiver, tokenVarName, stringVarName)
+	verbVarName := safeIndent("verb", receiver, tokenVarName, stringVarName, scanStateVarName)
+	xVarName := safeIndent("x", receiver, tokenVarName, stringVarName, scanStateVarName, verbVarName)
 
 	f = jen.NewFile(pkgName)
 	f.HeaderComment(fmt.Sprintf("Code generated by %q; DO NOT EDIT.", strings.Join(os.Args, " ")))
 
 	f.Line()
-	f.Commentf("String implements fmt.Stringer. If !%s.Defined(), then a generated string is returned based on %s's value.", receiver, receiver)
-	switch kind {
-	case constant.String:
-		f.Func().Params(jen.Id(receiver).Id(eType.Name())).Id("String").Params().String().Block(
-			jen.Return(jen.String().Parens(jen.Id(receiver))),
-		)
-	default:
-		f.Func().Params(jen.Id(receiver).Id(eType.Name())).Id("String").Params().String().Block(
-			jen.Switch(jen.Id(receiver)).BlockFunc(func(g *jen.Group) {
-				for _, c := range cs {
-					g.Case(jen.Id(c.Name())).Block(jen.Return(jen.Lit(c.Name())))
-				}
-			}),
-			jen.Return(jen.Qual("fmt", "Sprintf").Call(jen.Lit(fmt.Sprintf("%s(%%d)", eType.Name())), jen.Id(receiver))),
-		)
-	}
+	generateStringMethod(f, receiver, kind, tn, cs)
 
 	f.Line()
-	f.Commentf("Defined returns true if %s holds a defined value.", receiver)
-	f.Func().Params(jen.Id(receiver).Id(eType.Name())).Id("Defined").Params().Bool().Block(
-		jen.Switch(jen.Id(receiver)).Block(
-			jen.CaseFunc(func(g *jen.Group) {
-				for _, c := range cs {
-					g.Op(c.Val().ExactString())
-				}
-			}).Block(jen.Return(jen.True())),
-			jen.Default().Block(jen.Return(jen.False())),
-		),
-	)
+	generateDefinedMethod(f, receiver, tn, cs)
 
 	f.Line()
-	f.Commentf("Scan implements fmt.Scanner. Use fmt.Scan() to parse strings into %s values", eType.Name())
-	f.Func().Params(jen.Id(receiver).Op("*").Id(eType.Name())).Id("Scan").Params(jen.Id(scanStateVarName).Qual("fmt", "ScanState"), jen.Id(verbVarName).Rune()).Error().Block(
-		jen.List(jen.Id(tokenVarName), jen.Err()).Op(":=").Id(scanStateVarName).Dot("Token").Call(jen.True(), jen.Nil()),
-		jen.If(jen.Err().Op("!=").Nil()).Block(
-			jen.Return(jen.Err()),
-		),
-
-		jen.Line(),
-		jen.Switch(jen.String().Parens(jen.Id(tokenVarName))).BlockFunc(func(g *jen.Group) {
-			for _, c := range cs {
-				g.Case(jen.Lit(c.Name())).Block(
-					jen.Op("*").Id(receiver).Op("=").Id(c.Name()),
-				)
-			}
-			g.Default().Block(
-				jen.Return(jen.Qual("fmt", "Errorf").Call(jen.Lit("unknown "+eType.Name()+" value: %s"), jen.Id(tokenVarName))),
-			)
-		}),
-
-		jen.Return(jen.Nil()),
-	)
+	generateScanMethod(f, tn, receiver, scanStateVarName, verbVarName, tokenVarName, cs)
 
 	f.Line()
-	f.Commentf("Next returns the next defined %s. If %s is not defined, then Next returns the first defined value.", eType.Name(), receiver)
-	f.Commentf("The order that defined values are returned is undefined.")
-	f.Commentf("The only guarantee is that all defined values will be returned before Next starts cycling through previous values again.")
-	f.Commentf("The order will be consistent for a given program, but the order may change if the program is re-compiled.")
-	f.Func().Params(jen.Id(receiver).Id(eType.Name())).Id("Next").Params().Id(eType.Name()).Block(
-		jen.Switch(jen.Id(receiver)).BlockFunc(func(g *jen.Group) {
-			for i, c := range cs {
-				ni := (i + 1) % len(cs)
-				g.Case(jen.Id(c.Name())).Block(jen.Return(jen.Id(cs[ni].Name())))
-			}
-			if len(cs) > 0 {
-				g.Default().Block(jen.Return(jen.Id(cs[0].Name())))
-			}
-		}),
-	)
-
-	// f.Line()
-	// f.Commentf("First returns the first defined %s. First is a convenience method for initializing Next loops.", eType.Name())
-	// f.Func().Params(jen.Id(receiver).Id(eType.Name())).Id("First").Params().Id(eType.Name()).Block(
-	// 	jen.Return(jen.Id(cs[0].Name())),
-	// )
-	//
-	// f.Line()
-	// f.Commentf("Last returns the last defined %s. Last is a convenience method for terminating Next loops.", eType.Name())
-	// f.Func().Params(jen.Id(receiver).Id(eType.Name())).Id("Last").Params().Id(eType.Name()).Block(
-	// 	jen.Return(jen.Id(cs[len(cs)-1].Name())),
-	// )
+	generateNextMethod(f, tn, receiver, cs, kind)
 
 	f.Line()
-	f.Func().Id("_").Params().BlockFunc(func(g *jen.Group) {
+	generateCompileCheckFunction(f, xVarName, cs, kind)
+
+	f.Line()
+
+	return f, nil
+}
+
+// generateCompileCheckFunction generates the _() function that will fail to compile if the constant values have changed.
+func generateCompileCheckFunction(f *jen.File, xVarName string, cs []*types.Const, kind constant.Kind) *jen.Statement {
+	return f.Func().Id("_").Params().BlockFunc(func(g *jen.Group) {
 		g.Var().Id(xVarName).Index(jen.Lit(1)).Struct()
 		g.Comment(`An "invalid array index" compiler error signifies that the constant values have changed.`)
 		g.Commentf(`Re-run the %s command to generate them again.`, os.Args[0])
@@ -416,37 +372,132 @@ func generateEnums(pkgName string, eType *types.TypeName, cs []*types.Const, kin
 			}
 		}
 	})
-
-	f.Line()
-
-	return f, nil
 }
 
+// generateNextMethod generates the Next() method for the enum.
+func generateNextMethod(f *jen.File, tn *types.TypeName, receiver string, cs []*types.Const, kind constant.Kind) {
+	var zero interface{} = 0
+	if kind == constant.String {
+		zero = `""`
+	}
+
+	f.Commentf("Next returns the next defined %s. If %s is not defined, then Next returns the first defined value.", tn.Name(), receiver)
+	f.Commentf("Next() can be used to loop through all values of an enum.")
+	f.Commentf("")
+	f.Commentf("\t%s := %s(%v)", receiver, tn.Name(), zero)
+	f.Comment("\tfor {")
+	f.Commentf("\t\tfmt.Println(%s)", receiver)
+	f.Commentf("\t\t%s = %s.Next()", receiver, receiver)
+	f.Commentf("\t\tif %s == %s(%v) {", receiver, tn.Name(), zero)
+	f.Comment("\t\t\tbreak")
+	f.Comment("\t\t}")
+	f.Comment("\t}")
+	f.Commentf("")
+	f.Commentf("The exact order that values are returned when looping should not be relied upon.")
+	f.Func().Params(jen.Id(receiver).Id(tn.Name())).Id("Next").Params().Id(tn.Name()).Block(
+		jen.Switch(jen.Id(receiver)).BlockFunc(func(g *jen.Group) {
+			for i, c := range cs {
+				ni := (i + 1) % len(cs)
+				g.Case(jen.Id(c.Name())).Block(jen.Return(jen.Id(cs[ni].Name())))
+			}
+			if len(cs) > 0 {
+				g.Default().Block(jen.Return(jen.Id(cs[0].Name())))
+			}
+		}),
+	)
+}
+
+// generateScanMethod generates the Scan() method for the enum.
+func generateScanMethod(f *jen.File, tn *types.TypeName, receiver string, scanStateVarName string, verbVarName string, tokenVarName string, cs []*types.Const) {
+	f.Commentf("Scan implements fmt.Scanner. Use fmt.Scan() to parse strings into %s values", tn.Name())
+	f.Func().Params(jen.Id(receiver).Op("*").Id(tn.Name())).Id("Scan").Params(jen.Id(scanStateVarName).Qual("fmt", "ScanState"), jen.Id(verbVarName).Rune()).Error().Block(
+		jen.List(jen.Id(tokenVarName), jen.Err()).Op(":=").Id(scanStateVarName).Dot("Token").Call(jen.True(), jen.Nil()),
+		jen.If(jen.Err().Op("!=").Nil()).Block(
+			jen.Return(jen.Err()),
+		),
+
+		jen.Line(),
+		jen.Switch(jen.String().Parens(jen.Id(tokenVarName))).BlockFunc(func(g *jen.Group) {
+			for _, c := range cs {
+				g.Case(jen.Lit(c.Name())).Block(
+					jen.Op("*").Id(receiver).Op("=").Id(c.Name()),
+				)
+			}
+			g.Default().Block(
+				jen.Return(jen.Qual("fmt", "Errorf").Call(jen.Lit("unknown "+tn.Name()+" value: %s"), jen.Id(tokenVarName))),
+			)
+		}),
+
+		jen.Return(jen.Nil()),
+	)
+}
+
+// generateDefinedMethod generates the Defined() method for the enum.
+func generateDefinedMethod(f *jen.File, receiver string, tn *types.TypeName, cs []*types.Const) {
+	f.Commentf("Defined returns true if %s holds a defined value.", receiver)
+	f.Func().Params(jen.Id(receiver).Id(tn.Name())).Id("Defined").Params().Bool().Block(
+		jen.Switch(jen.Id(receiver)).Block(
+			jen.CaseFunc(func(g *jen.Group) {
+				for _, c := range cs {
+					g.Op(c.Val().ExactString())
+				}
+			}).Block(jen.Return(jen.True())),
+			jen.Default().Block(jen.Return(jen.False())),
+		),
+	)
+}
+
+// generateStringMethod generates the String() method for the enum.
+func generateStringMethod(f *jen.File, receiver string, kind constant.Kind, eType *types.TypeName, cs []*types.Const) {
+	f.Commentf("String implements fmt.Stringer. If !%s.Defined(), then a generated string is returned based on %s's value.", receiver, receiver)
+	switch kind {
+	case constant.String:
+		f.Func().Params(jen.Id(receiver).Id(eType.Name())).Id("String").Params().String().Block(
+			jen.Return(jen.String().Parens(jen.Id(receiver))),
+		)
+	default:
+		f.Func().Params(jen.Id(receiver).Id(eType.Name())).Id("String").Params().String().Block(
+			jen.Switch(jen.Id(receiver)).BlockFunc(func(g *jen.Group) {
+				for _, c := range cs {
+					g.Case(jen.Id(c.Name())).Block(jen.Return(jen.Lit(c.Name())))
+				}
+			}),
+			jen.Return(jen.Qual("fmt", "Sprintf").Call(jen.Lit(fmt.Sprintf("%s(%%d)", eType.Name())), jen.Id(receiver))),
+		)
+	}
+}
+
+// defaultReceiverName returns the default receiver name to use for tn
 func defaultReceiverName(tn *types.TypeName) string {
 	s, _ := utf8.DecodeRuneInString(tn.Name())
-	return unexportName(string(s))
+	return unexportedName(string(s))
 }
 
-func safeVarName(want string, not ...string) string {
+// safeIndent returns an identifier that is safe to use (not a keyword,
+// and not already used). want is the requested identifier; not is a
+// list of identifiers that are already used.
+func safeIndent(want string, not ...string) string {
 	if token.IsKeyword(want) {
-		return safeVarName("_"+want, not...)
+		return safeIndent("_"+want, not...)
 	}
 
 	for _, s := range not {
 		if want == s {
-			return safeVarName("_"+want, not...)
+			return safeIndent("_"+want, not...)
 		}
 	}
 
 	return want
 }
 
+// openOutputFile opens/creates the file to write the output to.
+// The returned func is the function to use to "close" the file.
 func openOutputFile(name string) (*os.File, func(), error) {
 	switch name {
 	case "<STDOUT>":
-		return os.Stdout, func() {}, nil
+		return os.Stdout, func() { _ = os.Stdout.Sync() }, nil
 	case "<STDERR>":
-		return os.Stderr, func() {}, nil
+		return os.Stderr, func() { _ = os.Stderr.Sync() }, nil
 	default:
 		ret, err := os.Create(name)
 		if err != nil {
@@ -456,7 +507,9 @@ func openOutputFile(name string) (*os.File, func(), error) {
 	}
 }
 
-func unexportName(s string) string {
+// unexportedName returns s with the first character replaced
+// with its lower case version if it is upper case.
+func unexportedName(s string) string {
 	if !ast.IsExported(s) {
 		return s
 	}

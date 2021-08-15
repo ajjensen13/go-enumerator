@@ -15,7 +15,7 @@
 //			Kind2
 // 		)
 //
-// go-enumerator will generate implementations for the following functions
+// go-enumerator will generate implementations for the following methods
 //
 // 		// String implements fmt.Stringer
 // 		func (k Kind) String() string { /* omitted for brevity */ }
@@ -30,12 +30,18 @@
 // 		func (k Kind) Next() Kind { /* omitted for brevity */ }
 //
 // Hopefully, the default behavior will serve your needs, but if not it can be changed
-// by supplying command-line arguments to the program.
+// by supplying command-line arguments to the program. For help with the cli, run with the
+// --help argument.
+//
+// 		go-enumerator --help
 //
 // Enjoy 😀
+//
 package main
 
-import "github.com/ajjensen13/go-enumerator/cmd"
+import (
+	"github.com/ajjensen13/go-enumerator/internal/cmd"
+)
 
 func main() {
 	cmd.Execute()

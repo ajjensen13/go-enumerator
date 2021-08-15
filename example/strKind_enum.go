@@ -38,9 +38,18 @@ func (s *StrKind) Scan(scanState fmt.ScanState, verb rune) error {
 }
 
 // Next returns the next defined StrKind. If s is not defined, then Next returns the first defined value.
-// The order that defined values are returned is undefined.
-// The only guarantee is that all defined values will be returned before Next starts cycling through previous values again.
-// The order will be consistent for a given program, but the order may change if the program is re-compiled.
+// Next() can be used to loop through all values of an enum.
+//
+// 	s := StrKind("")
+// 	for {
+// 		fmt.Println(s)
+// 		s = s.Next()
+// 		if s == StrKind("") {
+// 			break
+// 		}
+// 	}
+//
+// The exact order that values are returned when looping should not be relied upon.
 func (s StrKind) Next() StrKind {
 	switch s {
 	case Hello:
