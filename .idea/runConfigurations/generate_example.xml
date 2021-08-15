@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="generate example" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="go-enumerator" />
+    <working_directory value="$PROJECT_DIR$/example" />
+    <envs>
+      <env name="GOFILE" value="example.go" />
+      <env name="GOPACKAGE" value="example" />
+      <env name="GOLINE" value="3" />
+    </envs>
+    <kind value="DIRECTORY" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$" />
+    <method v="2" />
+  </configuration>
+</component>

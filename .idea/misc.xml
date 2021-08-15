@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="KubernetesApiPersistence">
+    <option name="context" value="gke_ajensen-1993_us-central1-a_ajensen-cluster" />
+    <option name="namespace" value="default" />
+  </component>
+</project>
