@@ -6,7 +6,7 @@ allow them to behave similar to enums in other languages.
 go-enumerator is designed to be invoked by `go generate`, 
 but it can be used as a command-line tool as well.
 
-See [https://pkg.go.dev/github.com/ajjensen13/go-enumerator](https://pkg.go.dev/github.com/ajjensen13/go-enumerator])
+See [https://pkg.go.dev/github.com/ajjensen13/go-enumerator](https://pkg.go.dev/github.com/ajjensen13/go-enumerator)
 for additional documentation.
 
 ## Installation
