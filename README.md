@@ -9,6 +9,7 @@ like enums. The generated methods allow users to:
 
 `go-enumerator` is designed to be invoked by `go generate`, 
 but it can be used as a command-line tool as well.
+
 ---
 [![Go Reference](https://pkg.go.dev/badge/github.com/ajjensen13/go-enumerator.svg)](https://pkg.go.dev/github.com/ajjensen13/go-enumerator) <br />
 Additional documentation available at [pkg.go.dev](https://pkg.go.dev/github.com/ajjensen13/go-enumerator)
