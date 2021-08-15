@@ -1,3 +1,5 @@
+[![Go Reference](https://pkg.go.dev/badge/github.com/ajjensen13/go-enumerator.svg)](https://pkg.go.dev/github.com/ajjensen13/go-enumerator)
+
 # go-enumerator
 go-enumerator is a code generation tool that
 generates methods for constant types that
@@ -55,6 +57,8 @@ and encode values into human-friendly representations.
 
 `Next()` can be used to loop through all defined values for an _enum_.
 
+`Defined()` can be used to ensure that a given variable holds a defined value.
+
 ## Remarks
 * go-enumerator was inspired by [stringer](https://pkg.go.dev/golang.org/x/tools/cmd/stringer)
-* Examples for how to use the generated code can be found at [https://pkg.go.dev/github.com/ajjensen13/go-enumerator/example](https://pkg.go.dev/github.com/ajjensen13/go-enumerator/example])
+* Examples for how to use the generated code can be found at [https://pkg.go.dev/github.com/ajjensen13/go-enumerator/example](https://pkg.go.dev/github.com/ajjensen13/go-enumerator/example)
