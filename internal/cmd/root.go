@@ -3,20 +3,21 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/dave/jennifer/jen"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"go/ast"
 	"go/constant"
 	"go/token"
 	"go/types"
-	"golang.org/x/tools/go/packages"
 	"math"
 	"os"
 	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/dave/jennifer/jen"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"golang.org/x/tools/go/packages"
 )
 
 func Execute() {
@@ -139,7 +140,7 @@ func resolveParameterValue(f *pflag.Flag, env string) (string, bool) {
 
 // loadPackage loads the package of file inputFileName.
 func loadPackage(pkgName, inputFileName string) (*packages.Package, error) {
-	pkgs, err := packages.Load(&packages.Config{Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo}, fmt.Sprintf("file=%s", inputFileName))
+	pkgs, err := packages.Load(&packages.Config{Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports}, fmt.Sprintf("file=%s", inputFileName))
 	if err != nil {
 		return nil, err
 	}
